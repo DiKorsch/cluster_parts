@@ -1,8 +1,13 @@
 import numpy as np
 
 from skimage.filters import threshold_otsu
+from sklearn.cluster import KMeans
 
 from cvargparse.utils.enumerations import BaseChoiceType
+
+from cluster_parts.utils import ClusterInitType
+from cluster_parts.utils import FeatureComposition
+from cluster_parts.utils import FeatureType
 
 
 class ThresholdType(BaseChoiceType):
@@ -18,17 +23,23 @@ class ThresholdType(BaseChoiceType):
 			return np.abs(grad).mean()
 
 		elif self == ThresholdType.PRECLUSTER:
-			from .clustering import cluster_gradient
-			centers, labs = cluster_gradient(im, grad,
-				K=2, thresh=None,
-				cluster_init=ClusterInitType.MIN_MAX,
-				# small fix, since it does not work with only one dimension
-				# or at least, it has to be fixed
-				feature_composition=["grad", "grad"]
-			)
+			K = 2 # background vs. foreground thresholding
+			init_coords = ClusterInitType.MIN_MAX(grad, K=K)
+			feats = FeatureComposition([FeatureType.SALIENCY])
 
+			init = feats(None, grad, init_coords)
+			kmeans = KMeans(n_clusters=K, init=init, n_init=1)
 
-			# 1th cluster represents the cluster around the maximal peak
+			h, w = grad.shape[:2]
+			idxs = np.arange(h * w)
+			coords = np.unravel_index(idxs, (h, w))
+			data = feats(None, grad, coords)
+
+			kmeans.fit(data)
+
+			labs = kmeans.labels_.reshape(h, w)
+
+			# 1-cluster represents the cluster around the maximal peak
 			return labs == 1
 
 		elif self == ThresholdType.OTSU:

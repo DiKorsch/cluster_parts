@@ -87,7 +87,7 @@ class BoundingBoxPartExtractor(object):
 		thresh_type=ThresholdType.Default,
 		cluster_init=ClusterInitType.Default,
 		feature_composition=FeatureComposition.Default):
-		super(BoundingBoxPartExtractor, self).__init__()
+		super().__init__()
 
 		self.corrector = corrector
 
@@ -204,7 +204,7 @@ class BoundingBoxPartExtractor(object):
 			clf = KMeans(self.K, init=init, n_init=1)
 
 		### get x,y coordinates of pixels to cluster
-		if isinstance(thresh, (int, float)):
+		if isinstance(thresh, (int, float, saliency.dtype.type)):
 			coords = np.where(np.abs(saliency) >= thresh)
 
 		elif isinstance(thresh, np.ndarray):
