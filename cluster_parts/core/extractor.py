@@ -7,10 +7,13 @@ from scipy.optimize import Bounds
 from scipy.optimize import minimize
 from sklearn.cluster import KMeans
 
+from cluster_parts.core.measures import FScore
+from cluster_parts.core.measures import Precision
+from cluster_parts.core.measures import Recall
 from cluster_parts.utils import ClusterInitType
 from cluster_parts.utils import FeatureComposition
 from cluster_parts.utils import ThresholdType
-from cluster_parts.core.measures import Recall, Precision, FScore
+from cluster_parts.utils import operations
 
 def _check_min_bbox(bbox, min_bbox):
 	y0, x0, y1, x1 = bbox
@@ -104,8 +107,6 @@ class BoundingBoxPartExtractor(object):
 		if isinstance(saliency, (list, tuple)):
 			return [self(image, sal) for sal in saliency]
 
-		# if (saliency == 0).all():
-		# 	import pdb; pdb.set_trace()
 		saliency = self.corrector(saliency)
 		centers, labs = self.cluster_saliency(image, saliency)
 		boxes = self.get_boxes(centers, labs, saliency)
@@ -113,9 +114,12 @@ class BoundingBoxPartExtractor(object):
 
 
 	def get_boxes(self, centers, labels, saliency):
-		saliency = saliency if self.optimal else None
+		if self.optimal:
+			saliency = operations.l2_norm(saliency)
+			saliency = operations.normalize(saliency)
+		else:
+			saliency = None
 
-		values = labels[np.logical_not(np.isnan(labels))]
 		obj_box = None
 
 		res = []
@@ -167,7 +171,8 @@ class BoundingBoxPartExtractor(object):
 
 		# the search area is weighted with the saliency values
 		if saliency is not None:
-			assert 0.0 <= saliency.max() <= 1.0
+			assert 0.0 <= saliency.max() <= 1.0, \
+				f"Invalid max value: {saliency.max()=}"
 			search_area *= saliency[y0:y1, x0:x1]
 
 		scaler = np.array([h, w, h, w])
@@ -194,7 +199,17 @@ class BoundingBoxPartExtractor(object):
 
 	def cluster_saliency(self, image, saliency):
 		thresh = self.thresh_type(image, saliency)
-		init_coords = self.cluster_init(saliency, self.K)
+		l2_saliency = operations.l2_norm(saliency)
+
+		thresh_mask = None
+		if isinstance(thresh, (int, float, saliency.dtype.type)):
+			thresh_mask = l2_saliency > thresh
+
+		elif isinstance(thresh, np.ndarray):
+			# thresh is already a mask
+			thresh_mask = thresh
+
+		init_coords = self.cluster_init(l2_saliency, self.K)
 
 		if init_coords is None:
 			clf = KMeans(self.K)
@@ -203,27 +218,24 @@ class BoundingBoxPartExtractor(object):
 			init = self.feature_composition(image, saliency, init_coords)
 			clf = KMeans(self.K, init=init, n_init=1)
 
+		h, w, *_ = saliency.shape
 		### get x,y coordinates of pixels to cluster
-		if isinstance(thresh, (int, float, saliency.dtype.type)):
-			coords = np.where(np.abs(saliency) >= thresh)
-
-		elif isinstance(thresh, np.ndarray):
-			# thresh is a mask
-			coords = np.where(thresh)
+		if thresh_mask is not None:
+			coords = np.where(thresh_mask)
 
 		else:
-			idxs = np.arange(np.multiply(*saliency.shape))
-			coords = np.unravel_index(idxs, saliency.shape)
+			idxs = np.arange(h * w)
+			coords = np.unravel_index(idxs, (h, w))
 
 		data = self.feature_composition(image, saliency, coords)
 
 		clf.fit(data)
 
-		labels = np.full(saliency.shape, np.nan)
+		labels = np.full((h, w), np.nan)
 		labels[coords] = clf.labels_
 		centers = clf.cluster_centers_.copy()
-		centers[:, 0] *= saliency.shape[0]
-		centers[:, 1] *= saliency.shape[1]
+		centers[:, 0] *= h
+		centers[:, 1] *= w
 
 		return centers, labels
 

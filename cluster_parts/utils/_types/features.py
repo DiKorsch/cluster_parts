@@ -20,12 +20,22 @@ class FeatureType(BaseChoiceType):
 
 	def __call__(self, im, saliency, coords):
 
+		assert len(coords) == 2, \
+			f"Incorrect input: {len(coords)=} != 2!"
+
+		assert saliency.ndim in (2, 3), \
+			f"Incorrect input: {saliency.ndim=} is neither 2 nor 3!"
+
 		ys, xs = coords
 		if self == FeatureType.COORDS:
 			return [ _norm(ys), _norm(xs) ]
 
 		elif self == FeatureType.SALIENCY:
-			return [ _norm(saliency[ys, xs].ravel()) ]
+			_saliency = saliency[ys, xs]
+			if _saliency.ndim == 1:
+				_saliency = np.expand_dims(_saliency, axis=1)
+			C = _saliency.shape[1]
+			return [ _norm(_saliency[:, chan].ravel()) for chan in range(C) ]
 
 		elif self == FeatureType.RGB:
 			_im = im[ys, xs]
@@ -48,5 +58,3 @@ class FeatureComposition(object):
 			feats.extend(comp(*args, **kwargs))
 
 		return np.stack(feats).transpose()
-
-

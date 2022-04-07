@@ -8,6 +8,7 @@ from cvargparse.utils.enumerations import BaseChoiceType
 from cluster_parts.utils import ClusterInitType
 from cluster_parts.utils import FeatureComposition
 from cluster_parts.utils import FeatureType
+from cluster_parts.utils import operations
 
 
 class ThresholdType(BaseChoiceType):
@@ -19,12 +20,17 @@ class ThresholdType(BaseChoiceType):
 	Default = PRECLUSTER
 
 	def __call__(self, im, grad):
+		assert grad.ndim in (2, 3), \
+			f"Incorrect input: {grad.ndim=} is neither 2 nor 3!"
+
+		l2_grad = operations.l2_norm(grad)
+
 		if self == ThresholdType.MEAN:
-			return np.abs(grad).mean()
+			return l2_grad > l2_grad.mean()
 
 		elif self == ThresholdType.PRECLUSTER:
 			K = 2 # background vs. foreground thresholding
-			init_coords = ClusterInitType.MIN_MAX(grad, K=K)
+			init_coords = ClusterInitType.MIN_MAX(l2_grad, K=K)
 			feats = FeatureComposition([FeatureType.SALIENCY])
 
 			init = feats(None, grad, init_coords)
@@ -43,7 +49,8 @@ class ThresholdType(BaseChoiceType):
 			return labs == 1
 
 		elif self == ThresholdType.OTSU:
-			thresh = threshold_otsu(grad)
-			return grad > thresh
+			thresh = threshold_otsu(l2_grad)
+			return l2_grad > thresh
+
 		else:
 			return None
