@@ -16,7 +16,9 @@ class ClusterInitType(BaseChoiceType):
 			f"Incorrect input: {grad.ndim=} != 2!"
 
 		if self == ClusterInitType.MAXIMAS:
-			return peak_local_max(grad, num_peaks=K).T
+			peaks = peak_local_max(grad, num_peaks=K).T
+			return peaks if peaks.shape[1] == K else None
+
 
 		elif self == ClusterInitType.MIN_MAX:
 
