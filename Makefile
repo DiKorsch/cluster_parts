@@ -4,11 +4,14 @@ install:
 build:
 	python setup.py build
 
-deploy:
-	python setup.py sdist upload -r pypi
+build_sdist:
+	@python setup.py build sdist
 
-test_deploy:
-	python setup.py sdist upload -r pypitest
+deploy: build_sdist
+	./deploy_latest.sh
+
+test_deploy: build_sdist
+	REPO=pypitest ./deploy_latest.sh
 
 get_version:
 	@printf "v"
