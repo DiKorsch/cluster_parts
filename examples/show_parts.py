@@ -190,3 +190,18 @@ def parse_args():
 
 
 main(parse_args())
+
+
+############ Example Calls:
+"""
+python show_parts.py \
+	~/Data/datasets/cub200/
+	--model_type cvmodelz.InceptionV3
+	--load ~/Data/MODELS/inception_inat/ft_CUB200/rmsprop.g_avg_pooling/inat.inceptionV3.ckpt/model_final.npz
+	--label_shift 1
+	--n_parts 4
+	--feature_composition coords saliency
+	--input_size 427
+	--shuffle
+	-g0
+"""
