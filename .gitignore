@@ -104,7 +104,7 @@ README.html
 *.npy
 scripts/*.csv
 
-datasets*
+datasets*/
 .results*
 .out
 .grid_search

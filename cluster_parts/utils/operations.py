@@ -1,5 +1,8 @@
 import numpy as np
 
+from cvdatasets.utils import rescale
+
+
 def l2_norm(arr, axis=2, keepdims=False, xp=np):
 	if arr.ndim == 2:
 		arr = xp.expand_dims(arr, axis=axis)
@@ -23,3 +26,24 @@ def normalize(arr, axis=2, channel_wise=False):
 		arr /= arr.max()
 
 	return arr
+
+def grad2saliency(grad, *, axis=1):
+	if grad.ndim == 3:
+		grad = grad[None]
+
+	grad = abs(grad)
+	other_axes = [a for a in range(1, 4) if a != axis]
+	grad = grad - grad.min(axis=other_axes, keepdims=True)
+	max_grad = grad.max(axis=other_axes, keepdims=True)
+	max_grad[max_grad == 0] = 1
+	grad = grad / max_grad
+
+	return grad.mean(axis=axis)
+
+def box_rescaled(im, part, init_size, *, center_cropped: bool):
+	xywh = np.array(part.as_annotation[1:], dtype=np.int32)
+
+	x, y = rescale(im, xywh[:2], init_size, center_cropped=center_cropped)
+	w, h = rescale(im, xywh[2:], init_size, center_cropped=center_cropped)
+
+	return (x, y), w, h

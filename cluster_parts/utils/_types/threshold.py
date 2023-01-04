@@ -17,7 +17,7 @@ class ThresholdType(BaseChoiceType):
 	PRECLUSTER = 2
 	OTSU = 3
 
-	Default = PRECLUSTER
+	Default = MEAN
 
 	def __call__(self, im, grad):
 		assert grad.ndim in (2, 3), \
