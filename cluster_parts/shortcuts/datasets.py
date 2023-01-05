@@ -4,6 +4,7 @@ import numpy as np
 from chainercv import transforms as tr
 from cvdatasets import dataset
 from cvdatasets.dataset.image import ImageWrapper
+from cvdatasets.dataset.mixins.base import BaseMixin
 from cvmodelz.models import BaseModel
 
 from cluster_parts.core.extractor import BoundingBoxPartExtractor
@@ -11,11 +12,7 @@ from cluster_parts.shortcuts.image_gradient import ImageGradient
 from cluster_parts.utils.operations import grad2saliency
 
 
-class CSPartsDataset(
-	dataset.ImageProfilerMixin,
-	dataset.IteratorMixin,
-	dataset.TransformMixin,
-	dataset.AnnotationsReadMixin):
+class CSPartsMixin(BaseMixin):
 
 	def __init__(self, *args,
 		model: BaseModel,
@@ -82,6 +79,14 @@ class CSPartsDataset(
 		self._annot.set_parts(self.uuids[i], parts)
 		return self.image_wrapped(i)
 
+
+
+class CSPartsDataset(
+	CSPartsMixin,
+	dataset.ImageProfilerMixin,
+	dataset.IteratorMixin,
+	dataset.TransformMixin,
+	dataset.AnnotationsReadMixin):
 
 	def transform(self, im_obj) -> tuple:
 		if len(im_obj.parts) == 0 or any([(-1 in p.as_annotation) for p in im_obj.parts]):
