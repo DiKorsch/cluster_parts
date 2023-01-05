@@ -32,7 +32,7 @@ def grad2saliency(grad, *, axis=1):
 		grad = grad[None]
 
 	grad = abs(grad)
-	other_axes = [a for a in range(1, 4) if a != axis]
+	other_axes = tuple([a for a in range(1, 4) if a != axis])
 	grad = grad - grad.min(axis=other_axes, keepdims=True)
 	max_grad = grad.max(axis=other_axes, keepdims=True)
 	max_grad[max_grad == 0] = 1

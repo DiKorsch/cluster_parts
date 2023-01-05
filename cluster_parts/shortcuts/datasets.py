@@ -74,10 +74,12 @@ class CSPartsMixin(BaseMixin):
 		return np.array(boxes, dtype=np.int32)
 
 	def set_parts(self, im_obj: ImageWrapper) -> ImageWrapper:
-		i = im_obj.uuid
-		parts = self.estimate_parts(im_obj)
-		self._annot.set_parts(self.uuids[i], parts)
-		return self.image_wrapped(i)
+		if len(im_obj.parts) == 0 or any([(-1 in p.as_annotation) for p in im_obj.parts]):
+			i = im_obj.uuid
+			parts = self.estimate_parts(im_obj)
+			self._annot.set_parts(self.uuids[i], parts)
+			return self.image_wrapped(i)
+		return im_obj
 
 
 
@@ -89,12 +91,11 @@ class CSPartsDataset(
 	dataset.AnnotationsReadMixin):
 
 	def transform(self, im_obj) -> tuple:
-		if len(im_obj.parts) == 0 or any([(-1 in p.as_annotation) for p in im_obj.parts]):
-			im_obj = self.set_parts(im_obj)
+		im_obj = self.set_parts(im_obj)
 
-			if self._include_visualization:
-				vis = self._visualization[im_obj.uuid]
-				return im_obj.as_tuple() + vis
+		if self._include_visualization:
+			vis = self._visualization[im_obj.uuid]
+			return im_obj.as_tuple() + vis
 
 		return im_obj.as_tuple()
 
