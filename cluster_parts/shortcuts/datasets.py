@@ -35,6 +35,19 @@ class CSPartsMixin(BaseMixin):
 		self._include_visualization = include_visualization
 		self._visualization = {}
 
+
+	@property
+	def model(self):
+		if self._model is None:
+			self._model = self.__model.copy(mode="copy")
+
+		return self._model
+
+	@model.setter
+	def model(self, model):
+		self._model = None
+		self.__model = model
+
 	@property
 	def clf(self):
 		if self._clf is None:

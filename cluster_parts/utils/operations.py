@@ -44,6 +44,6 @@ def box_rescaled(im, part, init_size, *, center_cropped: bool):
 	xywh = np.array(part.as_annotation[1:], dtype=np.int32)
 
 	x, y = rescale(im, xywh[:2], init_size, center_cropped=center_cropped)
-	w, h = rescale(im, xywh[2:], init_size, center_cropped=center_cropped)
+	w, h = rescale(im, xywh[2:], init_size, center_cropped=center_cropped, no_offset=True)
 
 	return (x, y), w, h
