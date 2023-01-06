@@ -42,8 +42,9 @@ def grad2saliency(grad, *, axis=1):
 
 def box_rescaled(im, part, init_size, *, center_cropped: bool):
 	xywh = np.array(part.as_annotation[1:], dtype=np.int32)
+	xy, wh = xywh[:2], xywh[2:]
 
-	x, y = rescale(im, xywh[:2], init_size, center_cropped=center_cropped)
-	w, h = rescale(im, xywh[2:], init_size, center_cropped=center_cropped, no_offset=True)
+	x, y = rescale(im, xy, init_size, center_cropped=center_cropped)
+	w, h = rescale(im, wh, init_size, center_cropped=center_cropped, no_offset=True)
 
 	return (x, y), w, h
