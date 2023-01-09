@@ -1,9 +1,12 @@
 import chainer
+import gc
+import numpy as np
 
-from chainer.dataset.convert import concat_examples
 from chainer.backends.cuda import to_cpu
+from chainer.dataset.convert import concat_examples
 from chainer.training import extension
 from chainercv import transforms as tr
+from pathlib import Path
 from tqdm.auto import tqdm
 
 from cluster_parts.shortcuts.image_gradient import ImageGradient
@@ -29,6 +32,7 @@ class CSPartEstimation(extension.Extension):
 		self.model = model
 		self.extractor = extractor
 		self.cs = cs
+		self.output = output
 
 		self._it_kwargs = dict(
 			batch_size=batch_size,
@@ -37,9 +41,13 @@ class CSPartEstimation(extension.Extension):
 		)
 
 		self._ready = False
+		self._manual_gc = True
 
-		self.__visualize = True
+		self.__visualize = False
 
+	def initialize(self, trainer):
+		if self.output is None:
+			self.output = trainer.out
 
 	@property
 	def model(self):
@@ -67,27 +75,66 @@ class CSPartEstimation(extension.Extension):
 	def estimate_parts(self, it, n_batches):
 
 		i = 0
-		boxes = []
 
-		for batch in tqdm(it, total=n_batches):
+		parts = []
+		for batch in tqdm(it, total=n_batches,
+			desc="Estimating CS Parts"):
 			X, *_, y = concat_examples(batch, device=self.model.device)
 			grad = ImageGradient(self.model, X)(cs=self.cs)
 			saliency = to_cpu(grad2saliency(grad))
 
 			for idx, (sal, x) in enumerate(zip(saliency, X), i):
-				im = self.ds.image_wrapped(idx).im_array
+				im_obj = self.ds.image_wrapped(idx)
+				im = im_obj.im_array
 				I = self._transform(im)
 
-				_boxes = self.extractor(I, sal)
-				boxes.append(_boxes)
+				boxes = self.extractor(I, sal)
+				boxes = [[int(_) for _ in (i,x,y,w,h)] for i, ((x,y), w, h) in boxes]
+
+				parts.append(boxes)
+
+				uuid = self.ds.uuids[idx]
+				self.ds._annot.set_parts(uuid, np.array(boxes, dtype=np.int32))
 
 				if self.__visualize:
-					_visualize(im, I, x, sal, _boxes)
+					_visualize(im, I, x, sal, boxes)
 
 			i += len(saliency)
 
-			# import pdb; pdb.set_trace()
+			if self._manual_gc:
+				gc.collect()
 
+		self.dump_boxes(parts)
+
+	def dump_boxes(self, parts):
+		if self.output is None:
+			return
+
+		output_dir = Path(self.output) / "parts"
+		output_dir.mkdir(parents=True, exist_ok=True)
+
+		part_locs =  output_dir / "part_locs.txt"
+		part_names =  output_dir / "parts.txt"
+		input_size =  output_dir / "input_size"
+
+		arr = []
+		for i, boxes in enumerate(parts):
+			uuid = self.ds.uuids[i]
+			for j, *coords in boxes:
+				arr.append([uuid, j] + coords)
+
+		arr = np.array(arr)
+		np.savetxt(part_locs, arr, fmt="%s %s %s %s %s %s")
+
+		with open(part_names, "w") as f:
+			for i in np.unique(arr[:, 1]):
+				print(f"Part #{i}", file=f)
+
+		with open(input_size, "w") as f:
+			size = tuple(self.ds.size)[0]
+			print(f"Input size: {size}", file=f)
+
+		exit(0)
 
 	def __call__(self, trainer):
 		assert not self._ready, "Extension should only be called once!"
@@ -97,7 +144,6 @@ class CSPartEstimation(extension.Extension):
 			parts = self.estimate_parts(it, n_batches)
 
 		self._ready = True
-
 
 
 def _visualize(orig, transformed, cnn_input, saliency, boxes):
@@ -117,8 +163,8 @@ def _visualize(orig, transformed, cnn_input, saliency, boxes):
 	axs[1, 1].imshow(_im, alpha=0.5)
 	axs[1, 1].imshow(saliency, alpha=0.5)
 
-	for i, box in boxes:
-		axs[1,1].add_patch(plt.Rectangle(*box, fill=False, edgecolor="blue"))
+	for i, x, y, w, h in boxes:
+		axs[1,1].add_patch(plt.Rectangle((x,y), w, h, fill=False, edgecolor="blue"))
 
 	plt.show()
 	plt.close()
