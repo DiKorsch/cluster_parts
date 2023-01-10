@@ -1,7 +1,10 @@
 import chainer
 import gc
+import logging
 import numpy as np
+import typing as T
 
+from chainer import functions as F
 from chainer.backends.cuda import to_cpu
 from chainer.dataset.convert import concat_examples
 from chainer.training import extension
@@ -25,6 +28,12 @@ class CSPartEstimation(extension.Extension):
 		batch_size: int = 32,
 		n_jobs: int = 0,
 		output: str = None,
+		track_accuracy: bool = True,
+		manual_gc: bool = True,
+		sample_pos: int = 0,
+		label_pos: int = 1,
+
+		visualize: bool = False,
 		**kwargs):
 		super(CSPartEstimation, self).__init__()
 
@@ -41,28 +50,35 @@ class CSPartEstimation(extension.Extension):
 		)
 
 		self._ready = False
-		self._manual_gc = True
+		self._manual_gc = manual_gc
+		self._sample_pos = sample_pos
+		self._label_pos = label_pos
+		self._track_accuracy = track_accuracy
 
-		self.__visualize = False
+		self.__visualize = visualize
 
 	def initialize(self, trainer):
 		if self.output is None:
 			self.output = trainer.out
 
 	@property
-	def model(self):
+	def model(self) -> T.Callable:
 		if self._model is None:
 			self._model = self.__model.copy(mode="copy")
 
 		return self._model
 
 	@model.setter
-	def model(self, model):
+	def model(self, model) -> None:
 		self._model = None
 		self.__model = model
 
 
-	def _transform(self, im, size=None):
+	@property
+	def clf(self) -> T.Callable:
+		return self.model.clf_layer
+
+	def _transform(self, im: np.ndarray, size=None) -> np.ndarray:
 		if size is None:
 			s = min(im.shape[:2])
 			size = (s, s)
@@ -72,18 +88,24 @@ class CSPartEstimation(extension.Extension):
 
 		return tr.resize(im, size).transpose(1,2,0)
 
-	def estimate_parts(self, it, n_batches):
+	def unpack_batch(self, batch):
+		batch = concat_examples(batch, device=self.model.device)
+		return batch[self._sample_pos], batch[self._label_pos]
 
-		i = 0
+	def estimate_parts(self, it, n_batches) \
+		-> T.List[T.List[int]]:
+
+		offset = 0
 
 		parts = []
+		preds, labs = [], []
 		for batch in tqdm(it, total=n_batches,
 			desc="Estimating CS Parts"):
-			X, *_, y = concat_examples(batch, device=self.model.device)
+			X, y = self.unpack_batch(batch)
 			grad = ImageGradient(self.model, X)(cs=self.cs)
 			saliency = to_cpu(grad2saliency(grad))
 
-			for idx, (sal, x) in enumerate(zip(saliency, X), i):
+			for idx, (sal, x) in enumerate(zip(saliency, X), offset):
 				im_obj = self.ds.image_wrapped(idx)
 				im = im_obj.im_array
 				I = self._transform(im)
@@ -99,14 +121,35 @@ class CSPartEstimation(extension.Extension):
 				if self.__visualize:
 					_visualize(im, I, x, sal, boxes)
 
-			i += len(saliency)
+			offset += len(saliency)
 
 			if self._manual_gc:
 				gc.collect()
 
-		self.dump_boxes(parts)
+			if self._track_accuracy:
+				feat = self.model.extract(X)
+				pred = F.argmax(self.clf(feat), axis=1)
+				preds.extend(to_cpu(chainer.as_array(pred)))
+				labs.extend(to_cpu(chainer.as_array(y)))
 
-	def dump_boxes(self, parts):
+		preds, labs = map(np.array, [preds, labs])
+		self.evaluate(preds, labs)
+		return parts
+
+	def evaluate(self, preds, labs):
+		if not self._track_accuracy:
+			return
+		tr_split = self.ds._annot.train_split
+
+		for subset, split in [("Training", tr_split), ("Test", ~tr_split)]:
+			split = split[:len(preds)]
+			accu = np.mean(preds[split] == labs[split])
+
+			logging.info(f"{subset} accuracy: {float(accu):.3%}")
+
+
+
+	def dump_boxes(self, parts) -> None:
 		if self.output is None:
 			return
 
@@ -134,15 +177,15 @@ class CSPartEstimation(extension.Extension):
 			size = tuple(self.ds.size)[0]
 			print(f"Input size: {size}", file=f)
 
-		exit(0)
 
-	def __call__(self, trainer):
+	def __call__(self, trainer) -> None:
 		assert not self._ready, "Extension should only be called once!"
 
 		it, n_batches = self.ds.new_iterator(**self._it_kwargs)
 		with chainer.using_config("train", False):
 			parts = self.estimate_parts(it, n_batches)
 
+		self.dump_boxes(parts)
 		self._ready = True
 
 
