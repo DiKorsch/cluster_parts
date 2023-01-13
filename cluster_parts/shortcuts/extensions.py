@@ -1,8 +1,10 @@
 import chainer
 import gc
 import logging
+import multiprocessing as mp
 import numpy as np
 import typing as T
+import warnings
 
 from chainer import functions as F
 from chainer.backends.cuda import to_cpu
@@ -14,6 +16,63 @@ from tqdm.auto import tqdm
 
 from cluster_parts.shortcuts.image_gradient import ImageGradient
 from cluster_parts.utils.operations import grad2saliency
+
+def identity(x):
+	return x
+
+class ExtractorPool:
+
+	def __init__(self, extractor, dataset, *args,
+		n_jobs: int = 0,
+		transform: T.Callable = None):
+
+		self.extractor = extractor
+		self.ds = dataset
+		self.transform = transform
+
+		self.pool = None
+		if n_jobs >= 1:
+			self.pool = mp.Pool(n_jobs)
+
+	def __getstate__(self):
+		state = self.__dict__.copy()
+		del state["pool"]
+		return state
+
+	# def __setstate__(self, state):
+	# 	self.__dict__.update(state)
+
+	@property
+	def transform(self):
+		return self._transform
+
+	@transform.setter
+	def transform(self, func):
+		if func is None or not callable(func):
+			reason = "None" if func is None else "not callable"
+			warnings.warn(f"Setting transformation function to identity, because it was {reason}.")
+			func = identity
+		self._transform = func
+
+
+	def __call__(self, saliency, offset) -> T.Tuple[int, T.List[int]]:
+
+		mapper = map if self.pool is None else self.pool.map
+
+		for idx, boxes in mapper(self.work, enumerate(saliency, offset)):
+			yield idx, boxes
+
+	def work(self, args):
+		idx, sal = args
+
+		im_obj = self.ds.image_wrapped(idx)
+		im = im_obj.im_array
+		I = self.transform(im)
+
+		boxes = self.extractor(I, sal)
+		boxes = [[int(_) for _ in (i,x,y,w,h)] for i, ((x,y), w, h) in boxes]
+		return idx, np.array(boxes, dtype=np.int32)
+
 
 
 class CSPartEstimation(extension.Extension):
@@ -37,17 +96,18 @@ class CSPartEstimation(extension.Extension):
 		**kwargs):
 		super(CSPartEstimation, self).__init__()
 
+		self._it_kwargs = dict(
+			batch_size=batch_size,
+			n_jobs=n_jobs,
+			repeat=False, shuffle=False,
+		)
+
 		self.ds = dataset
 		self.model = model
 		self.extractor = extractor
 		self.cs = cs
 		self.output = output
 
-		self._it_kwargs = dict(
-			batch_size=batch_size,
-			n_jobs=n_jobs,
-			repeat=False, shuffle=False,
-		)
 
 		self._ready = False
 		self._manual_gc = manual_gc
@@ -57,6 +117,12 @@ class CSPartEstimation(extension.Extension):
 
 		self.__visualize = visualize
 
+	def __getstate__(self):
+		state = self.__dict__.copy()
+		del state["_model"]
+		del state["_model_init"]
+		return state
+
 	def initialize(self, trainer):
 		if self.output is None:
 			self.output = trainer.out
@@ -64,14 +130,27 @@ class CSPartEstimation(extension.Extension):
 	@property
 	def model(self) -> T.Callable:
 		if self._model is None:
-			self._model = self.__model.copy(mode="copy")
+			self._model = self._model_init.copy(mode="copy")
 
 		return self._model
 
 	@model.setter
 	def model(self, model) -> None:
 		self._model = None
-		self.__model = model
+		self._model_init = model
+
+	@property
+	def extractor(self):
+		return self._extractor
+
+	@extractor.setter
+	def extractor(self, extr):
+		self._extractor = ExtractorPool(
+			extractor=extr,
+			dataset=self.ds,
+			transform=self._transform,
+			n_jobs=0, #self._it_kwargs["n_jobs"]
+		)
 
 
 	@property
@@ -99,29 +178,10 @@ class CSPartEstimation(extension.Extension):
 
 		parts = []
 		preds, labs = [], []
-		for batch in tqdm(it, total=n_batches,
-			desc="Estimating CS Parts"):
+		for batch in tqdm(it, total=n_batches, desc="Estimating CS Parts"):
 			X, y = self.unpack_batch(batch)
 			grad = ImageGradient(self.model, X)(cs=self.cs)
 			saliency = to_cpu(grad2saliency(grad))
-
-			for idx, (sal, x) in enumerate(zip(saliency, X), offset):
-				im_obj = self.ds.image_wrapped(idx)
-				im = im_obj.im_array
-				I = self._transform(im)
-
-				boxes = self.extractor(I, sal)
-				boxes = [[int(_) for _ in (i,x,y,w,h)] for i, ((x,y), w, h) in boxes]
-
-				parts.append(boxes)
-
-				uuid = self.ds.uuids[idx]
-				self.ds._annot.set_parts(uuid, np.array(boxes, dtype=np.int32))
-
-				if self.__visualize:
-					_visualize(im, I, x, sal, boxes)
-
-			offset += len(saliency)
 
 			if self._manual_gc:
 				gc.collect()
@@ -131,6 +191,23 @@ class CSPartEstimation(extension.Extension):
 				pred = F.argmax(self.clf(feat), axis=1)
 				preds.extend(to_cpu(chainer.as_array(pred)))
 				labs.extend(to_cpu(chainer.as_array(y)))
+
+			for idx, boxes in self.extractor(saliency, offset=offset):
+
+				uuid = self.ds.uuids[idx]
+				self.ds._annot.set_parts(uuid, boxes)
+				parts.append(boxes)
+
+
+				if self.__visualize:
+					i = idx - offset
+					im_obj = self.ds.image_wrapped(idx)
+					im = im_obj.im_array
+					I = self._transform(im)
+					_visualize(im, I, X[i], saliency[i], boxes)
+
+			offset += len(saliency)
+
 
 		preds, labs = map(np.array, [preds, labs])
 		self.evaluate(preds, labs)
