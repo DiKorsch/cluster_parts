@@ -3,7 +3,7 @@
 Algorithms for part estimation based on saliency based inputs.
 
 
-## Licence
+## License
 This work is licensed under a [GNU Affero General Public License][agplv3].
 
 [![AGPLv3][agplv3-image]][agplv3]
