@@ -16,7 +16,7 @@ class Corrector(object):
 	"""
 	def __init__(self, *, sigma, gamma, squeeze=True):
 		super(Corrector, self).__init__()
-		assert 0 < gamma <= 1, "Gamma should be in range (0, 1]"
+		assert gamma > 0, "Gamma should be greater than 0!"
 
 		self.sigma = sigma
 		self.squeeze = squeeze
@@ -32,5 +32,9 @@ class Corrector(object):
 			res = res.squeeze()
 
 		return res**self.gamma
+
+	@staticmethod
+	def identity(x):
+		return x.copy()
 
 

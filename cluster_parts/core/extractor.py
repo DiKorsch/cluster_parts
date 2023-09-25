@@ -1,15 +1,12 @@
 import logging
 import numpy as np
 
-from functools import partial
 from functools import wraps
 from scipy.optimize import Bounds
 from scipy.optimize import minimize
 from sklearn.cluster import KMeans
 
-from cluster_parts.core.measures import FScore
-from cluster_parts.core.measures import Precision
-from cluster_parts.core.measures import Recall
+from cluster_parts.core import measures
 from cluster_parts.utils import ClusterInitType
 from cluster_parts.utils import FeatureComposition
 from cluster_parts.utils import ThresholdType
@@ -179,12 +176,12 @@ class BoundingBoxPartExtractor(object):
 
 		init_bbox = np.array([0.25, 0.25, 0.75, 0.75])
 
-		func = Recall(search_area, scaler=scaler)
+		func = measures.Recall(search_area, scaler=scaler)
 
-		# func = Precision(search_area, scaler=scaler)
-		# func = FScore(search_area, scaler=scaler, beta=1)
-		# func = FScore(search_area, scaler=scaler, beta=2)
-		# func = FScore(search_area, scaler=scaler, beta=0.5)
+		# func = measures.Precision(search_area, scaler=scaler)
+		# func = measures.FScore(search_area, scaler=scaler, beta=1)
+		# func = measures.FScore(search_area, scaler=scaler, beta=2)
+		# func = measures.FScore(search_area, scaler=scaler, beta=0.5)
 
 		res = minimize(
 			fun=func,
