@@ -21,7 +21,7 @@ class ThresholdType(BaseChoiceType):
 
 	def __call__(self, im, grad):
 		assert grad.ndim in (2, 3), \
-			f"Incorrect input: {grad.ndim=} is neither 2 nor 3!"
+			f"Incorrect input: ndim={grad.ndim} is neither 2 nor 3!"
 
 		l2_grad = operations.l2_norm(grad)
 

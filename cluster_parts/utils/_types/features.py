@@ -21,10 +21,10 @@ class FeatureType(BaseChoiceType):
 	def __call__(self, im, saliency, coords):
 
 		assert len(coords) == 2, \
-			f"Incorrect input: {len(coords)=} != 2!"
+			f"Incorrect input: {len(coords)} != 2!"
 
 		assert saliency.ndim in (2, 3), \
-			f"Incorrect input: {saliency.ndim=} is neither 2 nor 3!"
+			f"Incorrect input: {saliency.ndim} is neither 2 nor 3!"
 
 		ys, xs = coords
 		if self == FeatureType.COORDS:

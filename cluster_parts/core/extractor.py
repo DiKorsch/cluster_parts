@@ -169,7 +169,7 @@ class BoundingBoxPartExtractor(object):
 		# the search area is weighted with the saliency values
 		if saliency is not None:
 			assert 0.0 <= saliency.max() <= 1.0, \
-				f"Invalid max value: {saliency.max()=}"
+				f"Invalid max value: {saliency.max()}"
 			search_area *= saliency[y0:y1, x0:x1]
 
 		scaler = np.array([h, w, h, w])

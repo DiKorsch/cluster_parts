@@ -13,7 +13,7 @@ class ClusterInitType(BaseChoiceType):
 
 	def __call__(self, grad, K=None):
 		assert grad.ndim == 2, \
-			f"Incorrect input: {grad.ndim=} != 2!"
+			f"Incorrect input: ndim={grad.ndim} != 2!"
 
 		if self == ClusterInitType.MAXIMAS:
 			peaks = peak_local_max(grad, num_peaks=K).T
