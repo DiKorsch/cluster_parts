@@ -1,13 +1,14 @@
 import numpy as np
+import enum
 
 from skimage.feature import peak_local_max
 
 from cvargparse.utils.enumerations import BaseChoiceType
 
 class ClusterInitType(BaseChoiceType):
-	NONE = 0
-	MAXIMAS = 0
-	MIN_MAX = 2
+	NONE = enum.auto()
+	MAXIMAS = enum.auto()
+	MIN_MAX = enum.auto()
 
 	Default = MAXIMAS
 

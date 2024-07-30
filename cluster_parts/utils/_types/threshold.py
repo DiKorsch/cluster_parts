@@ -1,4 +1,5 @@
 import numpy as np
+import enum
 
 from skimage.filters import threshold_otsu
 from sklearn.cluster import KMeans
@@ -12,10 +13,10 @@ from cluster_parts.utils import operations
 
 
 class ThresholdType(BaseChoiceType):
-	NONE = 0
-	MEAN = 1
-	PRECLUSTER = 2
-	OTSU = 3
+	NONE = enum.auto()
+	MEAN = enum.auto()
+	PRECLUSTER = enum.auto()
+	OTSU = enum.auto()
 
 	Default = MEAN
 

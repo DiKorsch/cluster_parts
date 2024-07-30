@@ -84,8 +84,8 @@ class BoundingBoxPartExtractor(object):
 	def __init__(self, corrector, *,
 		K=4, optimal=True,
 		min_bbox=64, fit_object=False,
-		thresh_type=ThresholdType.Default,
-		cluster_init=ClusterInitType.Default,
+		thresh_type=ThresholdType.MEAN,
+		cluster_init=ClusterInitType.MAXIMAS,
 		feature_composition=FeatureComposition.Default):
 		super().__init__()
 
@@ -235,4 +235,3 @@ class BoundingBoxPartExtractor(object):
 		centers[:, 1] *= w
 
 		return centers, labels
-

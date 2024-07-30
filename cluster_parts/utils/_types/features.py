@@ -16,7 +16,7 @@ class FeatureType(BaseChoiceType):
 	SALIENCY = "saliency"
 	RGB = "rgb"
 
-	Default = COORDS
+	# Default = COORDS
 
 	def __call__(self, im, saliency, coords):
 
