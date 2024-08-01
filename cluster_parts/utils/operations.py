@@ -32,13 +32,13 @@ def grad2saliency(grad, *, axis=1):
 		grad = grad[None]
 
 	grad = abs(grad)
-	other_axes = tuple([a for a in range(1, 4) if a != axis])
-	grad = grad - grad.min(axis=other_axes, keepdims=True)
-	max_grad = grad.max(axis=other_axes, keepdims=True)
-	max_grad[max_grad == 0] = 1
-	grad = grad / max_grad
-
-	return grad.mean(axis=axis)
+	# other_axes = tuple([a for a in range(1, grad.ndim) if a != axis])
+	grad = grad.mean(axis=axis)
+	grad = grad - grad.min()
+	max_grad = grad.max()
+	if max_grad != 0:
+		grad /= max_grad
+	return grad
 
 def box_rescaled(im, part, init_size, *, center_cropped: bool):
 	xywh = np.array(part.as_annotation[1:], dtype=np.int32)
